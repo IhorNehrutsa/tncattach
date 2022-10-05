@@ -20,13 +20,15 @@ extern void cleanup(void);
 
 void kiss_frame_received(int frame_len) {
     if ( (device_type == IF_TUN && frame_len >= TUN_MIN_FRAME_SIZE) || (device_type == IF_TAP && frame_len >= ETHERNET_MIN_FRAME_SIZE) )  {
-        int written = write(attached_if, frame_buffer, frame_len);
-        if (written == -1) {
-            if (verbose && !daemonize) printf("Could not write received KISS frame (%d bytes) to network interface, is the interface up?\r\n", frame_len);
-        } else if (written != frame_len) {
-            if (!daemonize) printf("Error: Could only write %d of %d bytes to interface", written, frame_len);
-            cleanup();
-            exit(1);
+        int written_, written = 0;
+        while (written < frame_len) {
+            written_ = write(attached_if, &frame_buffer[written], frame_len - written);
+            if (written_ == -1) {
+                if (verbose && !daemonize) printf("Could not write received KISS frame (%d bytes) to network interface, is the interface up?\r\n", frame_len);
+                cleanup();
+                exit(1);
+            }
+            written += written_;
         }
         if (verbose && !daemonize) printf("Got %d bytes from TNC, wrote %d bytes to interface\r\n", frame_len, written);
     }
@@ -81,5 +83,15 @@ int kiss_write_frame(int serial_port, uint8_t* buffer, int frame_len) {
     }
     write_buffer[write_len++] = FEND;
 
-    return write(serial_port, write_buffer, write_len);
+    int written_, written = 0;
+    while (written < frame_len) {
+        written_ = write(serial_port, &write_buffer[written], write_len - written);
+        if (written_ == -1) {
+            if (verbose && !daemonize) printf("Could not write frame (%d bytes) to serial_port\r\n", frame_len);
+            cleanup();
+            exit(1);
+        }
+        written += written_;
+    }
+    return written;
 }
